@@ -1,0 +1,111 @@
+import java.text.SimpleDateFormat
+
+plugins {
+    id "com.jfrog.bintray" version "1.2"
+}
+
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+def releaseVersion = System.properties.RELEASE_VERSION
+version = releaseVersion ? releaseVersion : new SimpleDateFormat('yyyy-MM-dd\'T\'HH-mm-ss').format(new Date())
+group = 'com.graphql-java'
+
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+apply plugin: 'groovy'
+
+jar {
+    from "LICENSE.md"
+}
+
+dependencies {
+    compile 'org.slf4j:slf4j-api:1.7.12'
+    compile 'com.graphql-java:graphql-java:2.3.0'
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    testCompile 'org.spockframework:spock-core:1.0-groovy-2.4'
+}
+
+compileJava.source file("build/generated-src"), sourceSets.main.java
+
+task sourcesJar(type: Jar) {
+    dependsOn classes
+    classifier 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+allprojects {
+    tasks.withType(Javadoc) {
+//        exclude('**/antlr/**')
+    }
+
+    tasks.withType(JavaCompile) {
+//        doFirst {
+//            if (sourceCompatibility == '1.6' && System.env.JDK6_HOME != null) {
+//                options.bootClasspath = "$System.env.JDK6_HOME/jre/lib/rt.jar"
+//            }
+//        }
+    }
+
+}
+
+publishing {
+
+    publications {
+
+        graphqlJava(MavenPublication) {
+            version version
+            from components.java
+
+            artifact sourcesJar {
+                classifier "sources"
+            }
+            artifact javadocJar {
+                classifier "javadoc"
+            }
+        }
+    }
+}
+
+
+bintray {
+    user = System.env.BINTRAY_USER ?: project["bintray.user"]
+    key = System.env.BINTRAY_API_KEY ?: project["bintray.key"]
+    publications = ['raphqlJavaAsync']
+    publish = true
+    pkg {
+        repo = 'graphql-java-async'
+        name = 'graphql-java-async'
+        desc = 'Async GraphQL in Java'
+        licenses = ['MIT']
+        vcsUrl = 'https://github.com/graphql-java/graphql-java-async'
+    }
+}
+
+// all publish tasks depend on the build task
+tasks.withType(PublishToMavenRepository) {
+    dependsOn build
+}
+
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '3.2'
+    distributionUrl = "http://services.gradle.org/distributions/gradle-${gradleVersion}-all.zip"
+}
