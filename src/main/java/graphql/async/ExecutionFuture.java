@@ -38,7 +38,6 @@ public class ExecutionFuture {
           return executionResult;
         })
         .thenApplyAsync(
-//          (Function<Object, ExecutionResult>)
             (completedData) -> {
               ((ExecutionResultImpl) executionResult).setData(completedData);
               return executionResult;
@@ -63,7 +62,6 @@ public class ExecutionFuture {
             return null;
           })
           .thenApply(
-//            (Function<Void, ExecutionResult>)
               (completablesDone) -> executionResult);
       }
     }
