@@ -30,7 +30,7 @@ public class GraphQL extends graphql.GraphQL {
    */
   public GraphQL(GraphQLSchema graphQLSchema) {
     //noinspection deprecation
-    this(graphQLSchema, new AsyncExecutionStrategy());
+    this(graphQLSchema, AsyncExecutionStrategy.parallel());
   }
 
 
@@ -44,7 +44,7 @@ public class GraphQL extends graphql.GraphQL {
    */
   public GraphQL(GraphQLSchema graphQLSchema, ExecutionStrategy queryStrategy) {
     //noinspection deprecation
-    super(graphQLSchema, queryStrategy);
+    super(graphQLSchema, queryStrategy, AsyncExecutionStrategy.parallel());
   }
 
   /**
@@ -60,6 +60,7 @@ public class GraphQL extends graphql.GraphQL {
                  ExecutionStrategy mutationStrategy) {
     super(graphQLSchema, queryStrategy, mutationStrategy);
     assert queryStrategy instanceof AsyncExecutionStrategy;
+    assert mutationStrategy instanceof AsyncExecutionStrategy;
   }
 
   /**
@@ -75,8 +76,8 @@ public class GraphQL extends graphql.GraphQL {
   public static class Builder {
 
     private GraphQLSchema graphQLSchema;
-    private ExecutionStrategy queryExecutionStrategy = new SimpleExecutionStrategy();
-    private ExecutionStrategy mutationExecutionStrategy = new SimpleExecutionStrategy();
+    private ExecutionStrategy queryExecutionStrategy = AsyncExecutionStrategy.parallel();
+    private ExecutionStrategy mutationExecutionStrategy = AsyncExecutionStrategy.serial();
 
     public Builder(GraphQLSchema graphQLSchema) {
       this.graphQLSchema = graphQLSchema;

@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import graphql.ExceptionWhileDataFetching;
 import graphql.ExecutionResult;
@@ -41,13 +42,31 @@ import static graphql.async.ExecutionFuture.array;
  */
 public class AsyncExecutionStrategy extends ExecutionStrategy {
 
-  ExecutorService executorService;
+  protected ExecutorService executorService;
+  protected boolean serial;
 
-  public AsyncExecutionStrategy() {
-    this(ForkJoinPool.commonPool());
+  public static AsyncExecutionStrategy serial() {
+    return new AsyncExecutionStrategy(true);
   }
 
-  public AsyncExecutionStrategy(ExecutorService executorService) {
+  public static AsyncExecutionStrategy serial(ExecutorService executorService) {
+    return new AsyncExecutionStrategy(true, executorService);
+  }
+
+  public static AsyncExecutionStrategy parallel() {
+    return new AsyncExecutionStrategy(false);
+  }
+
+  public static AsyncExecutionStrategy parallel(ExecutorService executorService) {
+    return new AsyncExecutionStrategy(false, executorService);
+  }
+
+  private AsyncExecutionStrategy(boolean serial) {
+    this(serial, ForkJoinPool.commonPool());
+  }
+
+  protected AsyncExecutionStrategy(boolean serial, ExecutorService executorService) {
+    this.serial = serial;
     this.executorService = executorService;
   }
 
@@ -68,7 +87,7 @@ public class AsyncExecutionStrategy extends ExecutionStrategy {
     Set<String> fieldNames = fields.keySet();
 
     // Create tasks to resolve each of the fields
-    fieldNames.stream().forEach((fieldName) -> {
+    (serial ? fieldNames.stream() : fieldNames.parallelStream()).forEach((fieldName) -> {
       fieldFutures.put(fieldName, CompletableFuture.supplyAsync(
         () -> resolveField(executionContext, parentType, source, fields.get(fieldName)),
         executorService));
