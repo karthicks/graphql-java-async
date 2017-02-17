@@ -8,7 +8,6 @@ import java.util.function.Consumer;
 import graphql.ExecutionResult;
 import graphql.execution.AsyncExecutionStrategy;
 import graphql.execution.ExecutionStrategy;
-import graphql.execution.SimpleExecutionStrategy;
 import graphql.schema.GraphQLSchema;
 
 import static graphql.Assert.assertNotNull;
@@ -44,7 +43,7 @@ public class GraphQL extends graphql.GraphQL {
    */
   public GraphQL(GraphQLSchema graphQLSchema, ExecutionStrategy queryStrategy) {
     //noinspection deprecation
-    super(graphQLSchema, queryStrategy, AsyncExecutionStrategy.parallel());
+    super(graphQLSchema, queryStrategy, AsyncExecutionStrategy.serial());
   }
 
   /**
@@ -59,8 +58,12 @@ public class GraphQL extends graphql.GraphQL {
   public GraphQL(GraphQLSchema graphQLSchema, ExecutionStrategy queryStrategy,
                  ExecutionStrategy mutationStrategy) {
     super(graphQLSchema, queryStrategy, mutationStrategy);
-    assert queryStrategy instanceof AsyncExecutionStrategy;
-    assert mutationStrategy instanceof AsyncExecutionStrategy;
+    assert queryStrategy instanceof AsyncExecutionStrategy :
+      "Async graphql requires an async query strategy";
+    assert mutationStrategy instanceof AsyncExecutionStrategy  :
+      "Async graphql requires an async mutation strategy";
+    assert ((AsyncExecutionStrategy) mutationStrategy).isSerial() :
+      "Async graphql requires a serial mutation strategy";
   }
 
   /**

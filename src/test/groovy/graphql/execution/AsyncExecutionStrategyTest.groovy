@@ -64,7 +64,6 @@ class AsyncExecutionStrategyTest extends Specification {
                 new ThreadPoolExecutor.CallerRunsPolicy());
 
         def graphQL = GraphQL.newAsyncGraphQL(NewsSchema.newsSchema)
-                .queryExecutionStrategy(AsyncExecutionStrategy.serial(threadPoolExecutor))
                 .build()
 
         def received = new AtomicReference<Map>()

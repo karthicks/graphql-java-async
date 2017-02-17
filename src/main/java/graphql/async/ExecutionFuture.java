@@ -8,12 +8,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
-import java.util.function.Function;
 
 import graphql.ExceptionWhileDataFetching;
 import graphql.ExecutionResult;
 import graphql.ExecutionResultImpl;
-import graphql.GraphQLError;
 
 public class ExecutionFuture {
 
@@ -31,17 +29,17 @@ public class ExecutionFuture {
     Object executionData = executionResult != null ? executionResult.getData() : null;
     if (executionData instanceof CompletableFuture) {
       return ((CompletableFuture) executionData)
-        .exceptionally((throwable) -> {
+        .exceptionally(throwable -> {
           ((ExecutionResultImpl) executionResult).addErrors(Arrays.asList(
             new ExceptionWhileDataFetching((Throwable) throwable)
           ));
           return executionResult;
         })
         .thenApplyAsync(
-            (completedData) -> {
-              ((ExecutionResultImpl) executionResult).setData(completedData);
-              return executionResult;
-            }, executorService);
+          completedData -> {
+            ((ExecutionResultImpl) executionResult).setData(completedData);
+            return executionResult;
+          }, executorService);
     } else if (executionData instanceof Map) {
       final Map<String, Object> results = (Map<String, Object>) executionData;
       List<CompletableFuture<Object>> completables = new ArrayList<>();
@@ -50,19 +48,19 @@ public class ExecutionFuture {
         if (fieldValue instanceof CompletableFuture) {
           completables.add(
             ((CompletableFuture) fieldValue)
-              .thenAccept((fieldValueDone) -> results.put(fieldName, fieldValueDone)));
+              .thenAccept(fieldValueDone -> results.put(fieldName, fieldValueDone)));
         }
       }
       if (!completables.isEmpty()) {
         return CompletableFuture.allOf(array(completables))
-          .exceptionally((throwable) -> {
+          .exceptionally(throwable -> {
             ((ExecutionResultImpl) executionResult).addErrors(Arrays.asList(
               new ExceptionWhileDataFetching(throwable)
             ));
             return null;
           })
           .thenApply(
-              (completablesDone) -> executionResult);
+            completablesDone -> executionResult);
       }
     }
     return CompletableFuture.completedFuture(executionResult);

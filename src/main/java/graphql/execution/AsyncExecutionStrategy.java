@@ -1,7 +1,6 @@
 package graphql.execution;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import graphql.ExceptionWhileDataFetching;
 import graphql.ExecutionResult;
@@ -21,8 +19,8 @@ import graphql.schema.GraphQLList;
 import graphql.schema.GraphQLObjectType;
 import graphql.schema.GraphQLType;
 
-import static graphql.async.ExecutionFuture.completable;
 import static graphql.async.ExecutionFuture.array;
+import static graphql.async.ExecutionFuture.completable;
 
 /**
  * <p>AsyncExecutionStrategy implements the {@link ExecutionStrategy} in a non-blocking manner.</p>
@@ -42,8 +40,8 @@ import static graphql.async.ExecutionFuture.array;
  */
 public class AsyncExecutionStrategy extends ExecutionStrategy {
 
-  protected ExecutorService executorService;
   protected boolean serial;
+  protected ExecutorService executorService;
 
   public static AsyncExecutionStrategy serial() {
     return new AsyncExecutionStrategy(true);
@@ -70,6 +68,10 @@ public class AsyncExecutionStrategy extends ExecutionStrategy {
     this.executorService = executorService;
   }
 
+  public boolean isSerial() {
+    return serial;
+  }
+
   /**
    * Resolve the given fields in parallel and return an execution result without blocking.
    *
@@ -87,17 +89,32 @@ public class AsyncExecutionStrategy extends ExecutionStrategy {
     Set<String> fieldNames = fields.keySet();
 
     // Create tasks to resolve each of the fields
-    (serial ? fieldNames.stream() : fieldNames.parallelStream()).forEach((fieldName) -> {
-      fieldFutures.put(fieldName, CompletableFuture.supplyAsync(
-        () -> resolveField(executionContext, parentType, source, fields.get(fieldName)),
-        executorService));
-    });
+    CompletableFuture<ExecutionResult> previousField = CompletableFuture.completedFuture(null);
+    for (String fieldName : fieldNames) {
+      CompletableFuture<ExecutionResult> fieldFuture;
+      if (serial) {
+        // Block the current field until the previous field is done
+        fieldFuture = previousField.thenCompose(result -> CompletableFuture.supplyAsync(
+          () -> resolveField(executionContext, parentType, source, fields.get(fieldName)),
+          executorService
+        ));
+        previousField = fieldFuture;
+      } else {
+        // Resolve every field in parallel, independent of each other
+        fieldFuture = CompletableFuture.supplyAsync(
+          () -> resolveField(executionContext, parentType, source, fields.get(fieldName)),
+          executorService
+        );
+      }
+      fieldFutures.put(fieldName, fieldFuture);
+    }
+
 
     // Prepare a completable for the map of field results
     CompletableFuture<Map<String, Object>> resultsFuture = CompletableFuture
       // First, wait for all the tasks above to complete
       .allOf(array(fieldFutures.values()))
-      .exceptionally((throwable) -> {
+      .exceptionally(throwable -> {
         executionContext.addError(new ExceptionWhileDataFetching(throwable));
         return null;
       })
@@ -107,25 +124,25 @@ public class AsyncExecutionStrategy extends ExecutionStrategy {
         return CompletableFuture
           .allOf(array(
             fieldNames.stream()
-              .map((fieldName) -> {
+              .map(fieldName -> {
                 final ExecutionResult fieldResult = fieldFutures.get(fieldName).join();
                 fieldResults.put(fieldName, fieldResult);
                 return completable(fieldResult, executorService);
               })
               .collect(Collectors.<CompletableFuture<ExecutionResult>>toList())
           ))
-          .exceptionally((throwable) -> {
+          .exceptionally(throwable -> {
             executionContext.addError(new ExceptionWhileDataFetching(throwable));
             return null;
           })
-          .thenApplyAsync((resultsDone) -> fieldResults, executorService);
+          .thenApplyAsync(resultsDone -> fieldResults, executorService);
       }, executorService)
       // Last, collect the results of the field into a map
-      .exceptionally((throwable) -> {
+      .exceptionally(throwable -> {
         executionContext.addError(new ExceptionWhileDataFetching(throwable));
         return new LinkedHashMap<>();
       })
-      .thenApplyAsync((fieldResults) -> {
+      .thenApplyAsync(fieldResults -> {
         Map<String, Object> results = new LinkedHashMap<>();
         for (String fieldName : fieldResults.keySet()) {
           ExecutionResult fieldResult = fieldResults.get(fieldName);
@@ -155,10 +172,10 @@ public class AsyncExecutionStrategy extends ExecutionStrategy {
     return ((CompletableFuture<ExecutionResult>) result)
       .thenComposeAsync(
         (Function<Object, CompletableFuture<ExecutionResult>>)
-          (completedResult) -> completable(
+          completedResult -> completable(
             executionStrategy.completeValue(executionContext, fieldType, fields, completedResult),
             executorService), executorService)
-      .exceptionally((throwable) -> {
+      .exceptionally(throwable -> {
         executionContext.addError(new ExceptionWhileDataFetching(throwable));
         return null;
       })
@@ -180,7 +197,7 @@ public class AsyncExecutionStrategy extends ExecutionStrategy {
       super.completeValueForList(executionContext, fieldType, fields, result);
     List<Object> completableResults = (List<Object>) executionResult.getData();
     List<Object> completedResults = new ArrayList<>();
-    completableResults.forEach((completedResult) -> {
+    completableResults.forEach(completedResult -> {
       completedResults.add((completedResult instanceof CompletableFuture) ?
                            ((CompletableFuture) completedResult).join() : completedResult);
     });
